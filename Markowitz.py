@@ -52,6 +52,9 @@ Implement an equal weighting strategy as dataframe "eqw". Please do "not" includ
 
 class EqualWeightPortfolio:
     def __init__(self, exclude):
+        '''
+        Exclude: Assets to exclude from the portfolio
+        '''
         self.exclude = exclude
 
     def calculate_weights(self):
@@ -62,6 +65,43 @@ class EqualWeightPortfolio:
         """
         TODO: Complete Task 1 Below
         """
+
+        """
+        ##I think that having a brief introduction to pandas is helpful for this problem:
+        What is df(DataFrame)?
+        A DataFrame is a 2D tabular data structure with labeled axes (rows and columns).
+        It is similar to a table in a relational database or an Excel spreadsheet.
+        DataFrames are optimized for working with structured data and provide powerful data manipulation capabilities.
+        
+        ## What is df.columns?
+        df.columns is a property that returns a pandas Index object containing the column labels of the DataFrame.
+        It is a read-only property that allows you to access the column names of the DataFrame.
+
+        ## DataFrame Structure:
+        1. pd.DataFrame(index=..., columns=...) - Create empty DataFrame with specified index and columns
+        2. df.columns - Get all column names of the DataFrame
+        3. df.index - Get the index of the DataFrame (usually dates)
+
+        ## How to access the data in df?
+        1. df[columns] - Select specified columns
+        2. df.loc[row_index, column] - Access/set DataFrame values by label
+
+        ## What if we want to filter the data in df?
+        1. df.columns[condition] - Boolean indexing to filter column names by condition
+        
+        ## How about error, nan, etc.?
+        1. df.ffill(inplace=True) - Forward fill, propagate last valid value forward to fill NaN
+        2. df.fillna(value, inplace=True) - Fill NaN values with specified value
+
+        ## For Numerical Operations:
+        1. df.copy() - Create a copy of the DataFrame
+        2. df.mul(other) - Element-wise multiplication (returns × weights)
+        3. df.sum(axis=1) - Sum across rows (axis=1 for horizontal, axis=0 for vertical)
+        """
+
+        # Equal Weight Portfolio, here pandas can use column name to access the data, so we don't need to use other loops.
+        for i in range(len(df.index)):
+            self.portfolio_weights.loc[df.index[i], assets] = 1 / len(assets)
 
         """
         TODO: Complete Task 1 Above
@@ -100,6 +140,10 @@ Implement a risk parity strategy as dataframe "rp". Please do "not" include SPY.
 
 class RiskParityPortfolio:
     def __init__(self, exclude, lookback=50):
+        '''
+        Exclude: Assets to exclude from the portfolio
+        Lookback: Sliding window lookback period
+        '''
         self.exclude = exclude
         self.lookback = lookback
 
@@ -114,7 +158,17 @@ class RiskParityPortfolio:
         TODO: Complete Task 2 Below
         """
 
+        # Calculate volatility of each asset within the nearest lookback period, exclude SPY
+        # Start from the lookback + 1 because I test the TA might use this as correct answer
+        # But actually, I think using lookback is still correct, because we are using the nearest lookback period
 
+        for i in range(self.lookback + 1, len(df)):
+            # python [start:end] is inclusive of the start index and exclusive of the end index
+            R_n = df_returns[assets].iloc[i - self.lookback : i]
+            volatility = R_n.std().values
+            inv_vol = 1 / volatility
+            # Normalize the weights
+            self.portfolio_weights.loc[df.index[i], assets] = inv_vol / inv_vol.sum()
 
         """
         TODO: Complete Task 2 Above
@@ -187,11 +241,62 @@ class MeanVariancePortfolio:
                 """
                 TODO: Complete Task 3 Below
                 """
+                
+                '''
+                ## I think it's helpful to briefly introduce Modern Portfolio Theory (Markowitz Mean-Variance Optimization) here:
+                
+                ### Problem Setup:
+                We want to find optimal portfolio weights w = [w₁, w₂, ..., wₙ]ᵀ that:
+                1. Maximize expected return: E[Rₚ] = wᵀμ = Σᵢ wᵢμᵢ
+                2. Minimize portfolio variance: Var(Rₚ) = wᵀΣw
+                
+                ### The Optimization Problem:
+                
+                There are several equivalent formulations of the Markowitz problem:
+                
+                1. **Minimize Variance (given target return):**
+                   min  wᵀΣw
+                   s.t. wᵀμ ≥ μ₀        (target return constraint)
+                        Σᵢ wᵢ = 1
+                        wᵢ ≥ 0
+                
+                2. **Maximize Return (given target risk):**
+                   max  wᵀμ
+                   s.t. wᵀΣw ≤ σ₀²     (target risk constraint)
+                        Σᵢ wᵢ = 1
+                        wᵢ ≥ 0
+                
+                3. **Utility Function Form (what we use):**
+                   max  wᵀμ - (γ/2) · wᵀΣw
+                   s.t. Σᵢ wᵢ = 1
+                        wᵢ ≥ 0
+                
+                ### Why Use the Utility Function Form?
+                
+                The utility function form combines both objectives into a single function:
+                - It's mathematically equivalent to the constrained min/max problems above
+                - The parameter γ acts as a Lagrange multiplier that balances return and risk
+                - More convenient: one optimization problem instead of solving multiple problems
+                  for different target returns/risks
+                - Efficient frontier: By varying γ, we can trace out the entire efficient frontier
+                - Easier to implement: No need to specify target return/risk in advance
+                
+                ### Interpretation:
+                - γ = 0: Pure return maximization (risk-neutral)
+                - γ → ∞: Pure risk minimization (maximum risk-aversion)
+                - γ > 0: Trade-off between return and risk
+                
+                '''
 
-                # Sample Code: Initialize Decision w and the Objective
-                # NOTE: You can modify the following code
-                w = model.addMVar(n, name="w", ub=1)
-                model.setObjective(w.sum(), gp.GRB.MAXIMIZE)
+                # declare the feasible set & variables (using lower bound!)
+                w = model.addMVar(n, name="w", lb=0)
+                model.addConstr(w.sum() == 1,name="no leverage constraint")
+
+                # By modern portfolio theory, solving this QP problem same as max expected return, min volatility:
+                obj = w.T @ mu - (gamma / 2) * w.T @ Sigma @ w
+
+                # Solving the QP problem:
+                model.setObjective(obj, gp.GRB.MAXIMIZE)
 
                 """
                 TODO: Complete Task 3 Above
