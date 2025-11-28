@@ -71,27 +71,44 @@ class MyPortfolio:
         TODO: Complete Task 4 Below
         """
 
-        asset_list = self.price.columns[self.price.columns != self.exclude]
-
         rolling_mom = (
-            (1 + self.returns[asset_list])
+            (1 + self.returns[assets])
             .rolling(self.lookback)
             .apply(lambda x: np.prod(x) - 1, raw=False)
         )
 
+        volatility_window = (
+            self.returns[assets]
+            .rolling(self.lookback)
+            .std()
+        )
+
+        # Use mean and volatility to calculate the weights, but window is lookback
         for t, date in enumerate(self.price.index):
             if t < self.lookback:
                 continue
 
             mom_today = rolling_mom.loc[date]
+            vol_today = volatility_window.loc[date]
 
-            top3 = mom_today.nlargest(3).index
+            vol_today = vol_today.replace(0, np.nan)
+
+            topk = mom_today.nlargest(3).index
 
             w_today = pd.Series(0.0, index=self.price.columns)
-            w_today[top3] = 1.0 / 3
-            w_today[self.exclude] = 0
+
+            inv_vol = 1.0 / vol_today.loc[topk]
+            inv_vol = inv_vol.replace([np.inf, -np.inf], np.nan).fillna(0)
+
+            if inv_vol.sum() > 0:
+                w_today.loc[topk] = inv_vol / inv_vol.sum()
+            else:
+                w_today.loc[topk] = 1.0 / len(topk)
+
+            w_today[self.exclude] = 0.0
 
             self.portfolio_weights.loc[date] = w_today
+
         
         """
         TODO: Complete Task 4 Above
