@@ -70,7 +70,28 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
-        
+
+        asset_list = self.price.columns[self.price.columns != self.exclude]
+
+        rolling_mom = (
+            (1 + self.returns[asset_list])
+            .rolling(self.lookback)
+            .apply(lambda x: np.prod(x) - 1, raw=False)
+        )
+
+        for t, date in enumerate(self.price.index):
+            if t < self.lookback:
+                continue
+
+            mom_today = rolling_mom.loc[date]
+
+            top3 = mom_today.nlargest(3).index
+
+            w_today = pd.Series(0.0, index=self.price.columns)
+            w_today[top3] = 1.0 / 3
+            w_today[self.exclude] = 0
+
+            self.portfolio_weights.loc[date] = w_today
         
         """
         TODO: Complete Task 4 Above
